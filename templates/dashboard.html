@@ -1,0 +1,114 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LabEquip | Laboratory Resource Control</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="/static/style.css"></head><body>
+<aside class="side">
+ <div class="brand"><div class="logo">L</div><div><b>LabEquip</b><small>RESOURCE CONTROL</small></div></div>
+ <div class="nav-h">WORKSPACE</div><nav id="nav"></nav>
+ <div class="sb">
+  <div class="me"><div class="av" id="av"></div><div><b id="mn"></b><small id="mr"></small></div></div>
+  <button class="btn" onclick="logout()">Sign out</button>
+  <div class="status"><i></i><div><b>System operational</b><small>Semaphore engine active</small></div></div>
+ </div>
+</aside>
+<main>
+<div class="top"><div><small class="k">LABORATORY OPERATIONS</small><h1 id="title">Resource overview</h1><p id="sub"></p></div>
+ <div class="act"><span class="btn" id="date"></span><button class="btn admin" onclick="resetDemo()">Reset demo</button></div></div>
+
+<section class="view on" id="v-overview">
+ <div class="kpis" id="kpis"></div>
+ <div class="grid2">
+  <div class="card"><h3>Equipment availability</h3><div class="sub">Live status by instrument type</div><div id="avail"></div></div>
+  <div class="card"><h3>Quick allocation</h3><div class="sub" id="qsub"></div>
+   <form id="qf">
+    <div id="stuBox"></div>
+    <label for="eq">Equipment</label><select id="eq"></select>
+    <label for="pur">Experiment / purpose</label><input id="pur" placeholder="e.g. Circuit analysis" maxlength="80">
+    <button class="btn pri" style="width:100%;margin-top:18px;padding:12px">Submit allocation request</button>
+    <small style="display:block;text-align:center;margin-top:10px">Requests are processed using a counting semaphore.</small>
+   </form></div>
+ </div>
+</section>
+
+<section class="view" id="v-inventory"><div class="card">
+ <h3>Equipment inventory</h3><div class="sub">Units per instrument type, each guarded by its own semaphore</div>
+ <table><thead><tr><th>Equipment</th><th>Total units</th><th>Free (S)</th><th>In use</th><th>Waiting</th><th>Status</th><th class="admin">Capacity</th></tr></thead><tbody id="inv"></tbody></table>
+ <form class="admin row2" id="ef" style="margin-top:22px;max-width:560px;align-items:end">
+  <div><label for="en">Equipment name</label><input id="en" list="names" placeholder="e.g. Logic Analyzer"><datalist id="names"></datalist></div>
+  <div style="display:flex;gap:8px"><div style="flex:1"><label for="ed">Units (+/-)</label><input id="ed" type="number" value="1"></div><button class="btn pri" style="margin-top:30px">Apply</button></div>
+ </form></div></section>
+
+<section class="view" id="v-allocations"><div class="card"><h3 id="alT">Allocations</h3><div class="sub">Equipment currently held</div>
+ <table><thead><tr><th>ID</th><th>Student</th><th>Roll number</th><th>Equipment</th><th>Purpose</th><th>Since</th><th>Allocated by</th><th></th></tr></thead><tbody id="al"></tbody></table></div></section>
+
+<section class="view" id="v-queue"><div class="card"><h3>Waiting queue</h3><div class="sub">First come, first served. The oldest request is granted when a unit is released.</div>
+ <table><thead><tr><th>Position</th><th>Student</th><th>Equipment</th><th>Purpose</th><th>Requested</th><th></th></tr></thead><tbody id="qu"></tbody></table></div></section>
+
+<section class="view" id="v-sync">
+ <div class="sem" id="sems"></div>
+ <div class="grid2"><div class="card"><h3>How the counting semaphore works</h3><div class="sub">Each equipment type has its own semaphore S, initialised to its number of units</div>
+<div class="code">wait(S):               // allocation request
+    if S &gt; 0:  S = S - 1   // unit granted
+    else:      add request to queue and block
+
+signal(S):             // release
+    if queue not empty:  grant unit to oldest waiter
+    else:                S = S + 1</div></div>
+ <div class="card"><h3>Recent operations</h3><div class="sub">wait and signal calls</div><ul class="log" id="ops" style="padding:0"></ul></div></div>
+</section>
+
+<section class="view" id="v-log"><div class="card"><h3 id="lgT">Activity log</h3><div class="sub">Newest first</div><ul class="log" id="lg" style="padding:0"></ul></div></section>
+
+<section class="view" id="v-users"><div class="grid2"><div class="card"><h3>User accounts</h3><div class="sub">Everyone who can sign in</div>
+ <table><thead><tr><th>ID</th><th>Name</th><th>Role</th></tr></thead><tbody id="us"></tbody></table></div>
+ <div class="card"><h3>Create account</h3><div class="sub">Add a student, faculty or admin</div>
+ <form id="uf"><label for="ui">ID / roll number</label><input id="ui" required><label for="un">Full name</label><input id="un" required>
+ <label for="ur">Role</label><select id="ur"><option>student</option><option>faculty</option><option>admin</option></select>
+ <label for="up">Password</label><input id="up" required><button class="btn pri" style="width:100%;margin-top:18px">Create account</button></form></div></div></section>
+</main><div id="toast" role="status"></div>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let S,view='overview',sig='',staff=false;
+const NAV=[['overview','Overview','▥'],['inventory','Equipment inventory','▦'],['allocations','Allocations','⇄'],['queue','Waiting queue','◔'],['SYSTEM'],['sync','OS synchronization','⌘'],['log','Activity log','≡'],['users','Users','☺','admin']];
+const SUB={overview:'Monitor equipment availability, manage student requests and control shared resources.',inventory:'Every instrument and the semaphore that guards it.',allocations:'Equipment currently allocated to students.',queue:'Requests waiting for a free unit.',sync:'Live counting semaphore state for each equipment type.',log:'A record of every allocation, release and sign-in.',users:'Manage who can access LabEquip.'};
+const TTL={overview:'Resource overview',inventory:'Equipment inventory',allocations:'Allocations',queue:'Waiting queue',sync:'OS synchronization',log:'Activity log',users:'User accounts'};
+async function api(u,b){const r=await fetch(u,b===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});if(r.status===401){location='/login';return{}}return r.json()}
+function toast(r){const t=$('#toast');t.textContent=r.error||r.message;t.className='on'+(r.error?' bad':'');setTimeout(()=>t.className='',2600)}
+async function logout(){await api('/api/logout',{});location='/login'}
+function go(v){view=v;document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id==='v-'+v));$('#title').textContent=TTL[v];$('#sub').textContent=SUB[v];buildNav();render();if(v==='users')loadUsers()}
+function buildNav(){const role=S.user.role;$('#nav').innerHTML=NAV.map(n=>{if(n[0]==='SYSTEM')return'<div class="nav-h">SYSTEM</div>';if(n[3]&&n[3]!==role)return'';
+ const w=S.sems.reduce((a,x)=>a+x.queue.length,0),b=n[0]==='queue'?`<span class="badge">${w}</span>`:'';
+ const lbl=role==='student'&&n[0]==='allocations'?'My allocations':role==='student'&&n[0]==='log'?'My activity':n[1];
+ return`<a class="${view===n[0]?'on':''}" onclick="go('${n[0]}')"><span class="ic">${n[2]}</span>${lbl}${b}</a>`}).join('')}
+function status(e){return e.free===0?'<span class="tag t-out">Fully allocated</span>':e.free<=1?'<span class="tag t-low">Low stock</span>':'<span class="tag t-ok">Available</span>'}
+function render(){if(!S)return;const u=S.user,E=S.equipment;staff=u.role!=='student';document.body.dataset.role=u.role;
+ $('#mn').textContent=u.name;$('#mr').textContent=u.role;$('#av').textContent=u.name.replace(/^(Prof\.|Dr\.)\s*/,'')[0];
+ const tot=E.reduce((a,x)=>a+x.total,0),free=E.reduce((a,x)=>a+x.free,0),w=S.sems.reduce((a,x)=>a+x.queue.length,0);
+ const k=(l,v,n,c,i,col)=>`<div class="card kpi"><div class="r"><span>${l}</span><span class="ic" style="background:${c};color:${col}">${i}</span></div><b>${v}</b><small>${n}</small></div>`;
+ $('#kpis').innerHTML=k('Total equipment',tot,`Across ${E.length} instrument categories`,'#e3edff','▦','#0a66e8')+k('Available now',free,'<span style="color:#10a56b;font-weight:600">Ready</span> for allocation','#e1f6ec','✓','#10a56b')+k('Currently allocated',tot-free,'In student possession','#fdf0d9','⇄','#e8920c')+k('Waiting requests',w,'Pending resource availability','#efeafc','◔','#6d4fd8');
+ $('#avail').innerHTML=E.map(e=>`<div class="av-row"><div><b>${esc(e.name)}</b><small>${e.used} in use · ${e.free} ready</small></div><div class="bar"><i style="width:${e.used/e.total*100}%;background:${e.free===0?'#d9363e':'#0a66e8'}"></i></div><div class="cnt">${e.free} <span>/ ${e.total}</span></div></div>`).join('');
+ const o=E.map(e=>`<option>${esc(e.name)}</option>`).join('');if($('#eq').dataset.o!==o){const v=$('#eq').value;$('#eq').innerHTML=o;$('#eq').dataset.o=o;if(v)$('#eq').value=v;$('#names').innerHTML=o}
+ $('#inv').innerHTML=E.map(e=>`<tr><td><b>${esc(e.name)}</b></td><td>${e.total}</td><td>${e.free}</td><td>${e.used}</td><td>${e.waiting}</td><td>${status(e)}</td><td class="admin"><button class="btn sm" onclick="cap('${esc(e.name)}',-1)">−1</button> <button class="btn sm" onclick="cap('${esc(e.name)}',1)">+1</button></td></tr>`).join('');
+ const A=S.requests.filter(r=>r.status==='allocated'),Q=S.requests.filter(r=>r.status==='waiting').sort((a,b)=>a.pos-b.pos);
+ $('#alT').textContent=staff?'Allocations':'My allocations';$('#lgT').textContent=staff?'Activity log':'My activity';
+ $('#al').innerHTML=A.length?A.map(r=>`<tr><td>#${r.id}</td><td>${esc(r.name)}</td><td>${esc(r.uid)}</td><td>${esc(r.equipment)}</td><td>${esc(r.purpose)}</td><td>${esc(r.since)}</td><td>${esc(r.by)}</td><td><button class="btn sm danger" onclick="rel(${r.id})">Release</button></td></tr>`).join(''):'<tr><td colspan="8" class="empty">No equipment allocated right now.</td></tr>';
+ $('#qu').innerHTML=Q.length?Q.map(r=>`<tr><td><span class="tag t-wait">#${r.pos} in ${esc(r.equipment)}</span></td><td>${esc(r.name)}</td><td>${esc(r.equipment)}</td><td>${esc(r.purpose)}</td><td>${esc(r.time)}</td><td><button class="btn sm" onclick="rel(${r.id})">Cancel</button></td></tr>`).join(''):'<tr><td colspan="6" class="empty">The queue is empty.</td></tr>';
+ $('#sems').innerHTML=S.sems.map(s=>`<div class="card"><div style="display:flex;justify-content:space-between"><h3>${esc(s.name)}</h3><span class="tag ${s.S?'t-ok':'t-out'}">S = ${s.S}</span></div><div class="slots">${Array.from({length:s.total},(_,i)=>`<i class="${i<s.total-s.S?'u':''}"></i>`).join('')}</div><small>${s.total-s.S} allocated · ${s.S} free · ${s.queue.length} waiting</small><div class="chips" style="margin-top:12px">${staff?s.queue.map((n,i)=>`<span>${i+1}. ${esc(n)}</span>`).join(''):''}</div></div>`).join('');
+ const L=S.log.map(l=>`<li><time>${esc(l.t)}</time><span>${esc(l.msg)}</span></li>`);
+ $('#lg').innerHTML=L.join('')||'<li class="empty">No activity yet.</li>';
+ $('#ops').innerHTML=S.log.filter(l=>['alloc','wait','release'].includes(l.kind)).slice(0,8).map(l=>`<li><time>${esc(l.t.slice(7))}</time><span>${esc(l.msg)}</span></li>`).join('')||'<li class="empty">No operations yet.</li>';
+ const key=u.role;if(sig!==key){sig=key;$('#qsub').textContent=staff?'Allocate equipment to a student':'Request equipment for your lab session';
+  $('#stuBox').innerHTML=staff?'<label for="stu">Student</label><select id="stu"></select>':`<label>Student</label><input value="${esc(u.name)}" readonly><label>Roll number</label><input value="${esc(u.id)}" readonly>`;
+  if(staff)api('/api/people').then(p=>$('#stu').innerHTML=p.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} (${esc(x.id)})</option>`).join(''))}
+ buildNav()}
+async function load(){S=await api('/api/state');if(S.user)render()}
+$('#qf').onsubmit=async e=>{e.preventDefault();const b={equipment:$('#eq').value,purpose:$('#pur').value};if(staff)b.student_id=$('#stu').value;const r=await api('/api/allocate',b);toast(r);$('#pur').value='';load()};
+async function rel(id){toast(await api('/api/release',{id}));load()}
+async function cap(name,d){toast(await api('/api/equipment',{name,delta:d}));load()}
+$('#ef').onsubmit=async e=>{e.preventDefault();toast(await api('/api/equipment',{name:$('#en').value,delta:+$('#ed').value}));load()};
+async function resetDemo(){if(confirm('Reset all allocations and the waiting queue?')){toast(await api('/api/reset',{}));load()}}
+async function loadUsers(){const u=await api('/api/users');$('#us').innerHTML=u.map(x=>`<tr><td>${esc(x.id)}</td><td>${esc(x.name)}</td><td><span class="tag t-wait">${x.role}</span></td></tr>`).join('')}
+$('#uf').onsubmit=async e=>{e.preventDefault();const r=await api('/api/users',{id:$('#ui').value,name:$('#un').value,role:$('#ur').value,password:$('#up').value});toast(r);if(!r.error){e.target.reset();loadUsers()}};
+$('#date').textContent='◷ '+new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+load().then(()=>go('overview'));setInterval(load,3000);
+</script></body></html>

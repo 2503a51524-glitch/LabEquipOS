@@ -1,0 +1,29 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign in | LabEquip</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="/static/style.css"></head><body>
+<div class="login">
+ <section class="hero">
+  <div class="brand"><div class="logo">L</div><div><b>LabEquip</b><small>RESOURCE CONTROL</small></div></div>
+  <div><h1>Shared lab equipment, allocated fairly.</h1>
+   <p>Every instrument is guarded by a counting semaphore. Requests are granted while units are free and queued in order when none are left.</p></div>
+  <div class="pts"><div><i>✓</i>Students request equipment and release it when done</div><div><i>✓</i>Faculty allocate equipment and monitor every request</div><div><i>✓</i>Admins manage inventory and user accounts</div></div>
+ </section>
+ <section class="panel"><form class="box" id="f">
+  <h2>Welcome back</h2><small>Sign in to open the dashboard.</small>
+  <div class="tabs" id="tabs"><button type="button" data-r="student" class="on">Student</button><button type="button" data-r="faculty">Faculty</button><button type="button" data-r="admin">Admin</button></div>
+  <label for="id" id="idl">Roll number</label><input id="id" autocomplete="username" required>
+  <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" required>
+  <div class="err" id="err" role="alert"></div>
+  <button class="btn pri" style="width:100%;padding:12px;margin-top:6px">Sign in</button>
+  <div class="demo">Demo accounts: <a data-d="2503A51524|student123|student">Student</a> · <a data-d="fac01|faculty123|faculty">Faculty</a> · <a data-d="admin|admin123|admin">Admin</a></div>
+ </form></section></div>
+<script>
+let role='student';const $=s=>document.querySelector(s);
+function setRole(r){role=r;document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.r===r));$('#idl').textContent=r==='student'?'Roll number':r==='faculty'?'Faculty ID':'Admin ID'}
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>setRole(b.dataset.r));
+document.querySelectorAll('[data-d]').forEach(a=>a.onclick=()=>{const[i,p,r]=a.dataset.d.split('|');setRole(r);$('#id').value=i;$('#pw').value=p});
+$('#f').onsubmit=async e=>{e.preventDefault();$('#err').textContent='';
+ const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:$('#id').value,password:$('#pw').value,role})});
+ if(r.ok)location='/';else $('#err').textContent=(await r.json()).error};
+</script></body></html>
